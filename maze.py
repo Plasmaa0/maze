@@ -118,10 +118,12 @@ class Game():
                         exit(0)
                 if event.type == pygame.MOUSEMOTION:
                     x, y = event.pos
-                    finish = [int(x/self.tilesize), int(y/self.tilesize)]
+                    finish = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
+                        y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     x, y = event.pos
-                    start = [int(x/self.tilesize), int(y/self.tilesize)]
+                    start = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
+                        y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
 
     def check(self):
         if not self.complete:
@@ -221,6 +223,7 @@ class Game():
 
     def createmaze(self):
         print("started creating")
+
         def makeroute(route: list):
             for i in range(1, len(route)):
                 self.maze.deletewall(route[i - 1], route[i])
