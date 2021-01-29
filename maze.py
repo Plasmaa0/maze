@@ -80,7 +80,7 @@ class Tilemap():
 
 class Game():
     '''
-    *description*
+    Main game class
     '''
 
     def __init__(self, size: int, doanimate: bool) -> None:
@@ -89,9 +89,9 @@ class Game():
         self.fps = 24
         self.size = size
         self.clock = pygame.time.Clock()
-        self.backgroundcolor = [0, 0, 0]
+        self.backgroundcolor = [46, 44, 47]
         self.windowsize = 800
-        self.wallcolor = [200, 60, 60]
+        self.wallcolor = [114, 155, 121]
         self.tilesize = int(self.windowsize/self.size)
         self.maze = Tilemap(self.size)
         while True:
@@ -127,7 +127,7 @@ class Game():
 
     def check(self):
         if not self.complete:
-            self.thread.sto
+            self.thread.join()
 
     def neighbors(self, node: list) -> list:
         neighborlist = []
@@ -189,20 +189,20 @@ class Game():
                 t = self.maze.gettile(x, y)
                 if t.top:
                     pygame.draw.line(self.screen, self.wallcolor, [
-                                     x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*0.1], [x*self.tilesize + self.tilesize*0.9, y*self.tilesize + self.tilesize*0.1])
+                                     x*self.tilesize + self.tilesize*0.05, y*self.tilesize + self.tilesize*0.05], [x*self.tilesize + self.tilesize*1.05, y*self.tilesize + self.tilesize*0.05], int(self.tilesize/5))
                 if t.bottom:
-                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*0.95], [
-                                     x*self.tilesize + self.tilesize*0.9, y*self.tilesize + self.tilesize*0.95])
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.05, y*self.tilesize + self.tilesize*0.95], [
+                                     x*self.tilesize + self.tilesize*1.05, y*self.tilesize + self.tilesize*0.95], int(self.tilesize/5))
                 if t.left:
                     pygame.draw.line(self.screen, self.wallcolor, [
-                                     x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*0.1], [x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*0.95])
+                                     x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*0.05], [x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*1.05], int(self.tilesize/5))
                 if t.right:
-                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.9, y*self.tilesize + self.tilesize*0.1], [
-                                     x*self.tilesize + self.tilesize*0.9, y*self.tilesize + self.tilesize*0.95])
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.95, y*self.tilesize + self.tilesize*0.05], [
+                                     x*self.tilesize + self.tilesize*0.95, y*self.tilesize + self.tilesize*1.05], int(self.tilesize/5))
         for i in range(1, len(self.route)):
             x1, y1 = self.route[i-1]
             x2, y2 = self.route[i]
-            pygame.draw.line(self.screen, (60, 200, 100), (x1*self.tilesize + self.tilesize/2, y1*self.tilesize + self.tilesize/2),
+            pygame.draw.line(self.screen, (120, 200, 100), (x1*self.tilesize + self.tilesize/2, y1*self.tilesize + self.tilesize/2),
                              (x2*self.tilesize + self.tilesize/2, y2*self.tilesize + self.tilesize/2), int(self.tilesize/10))
 
     def alltiles(self):
@@ -222,8 +222,6 @@ class Game():
         return neighbors
 
     def createmaze(self):
-        print("started creating")
-
         def makeroute(route: list):
             for i in range(1, len(route)):
                 self.maze.deletewall(route[i - 1], route[i])
