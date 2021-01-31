@@ -5,6 +5,11 @@ import random
 import queue
 import time
 from functools import lru_cache
+import threading
+import queue
+
+
+LOG = True
 
 
 class Tile():
@@ -43,6 +48,11 @@ class Tilemap():
             self.tiles.append([None]*size)
         for x in range(size):
             for y in range(size):
+                self.tiles[x][y] = Tile(True, True, True, True)
+
+    def reset(self):
+        for x in range(self.size):
+            for y in range(self.size):
                 self.tiles[x][y] = Tile(True, True, True, True)
 
     def gettile(self, x: int, y: int):
@@ -85,8 +95,13 @@ class Game():
     '''
 
     def __init__(self, size: int) -> None:
+        if size < 15:
+            print(
+                "do you want to visualize distance from start to different maze nodes?(0/1) (time expensive)")
+            self.visualise = int(input()) == 1
+        else:
+            self.visualise = False
         t1 = time.time()
-        self.complete = False
         self.fps = 24
         self.size = size
         self.clock = pygame.time.Clock()
@@ -95,27 +110,26 @@ class Game():
         self.wallcolor = [114, 155, 121]
         self.tilesize = int(self.windowsize/self.size)
         self.maze = Tilemap(self.size)
-        # while True:
-        #     self.thread = threading.Thread(None, self.createmaze())
-        #     self.thread.start()
-        #     time.delay(1000)
-        #     if self.complete:
-        #         break
-
         self.createmaze()
-        # self.thread.join()
-        self.screen = pygame.display.set_mode(
-            (self.windowsize, self.windowsize))
         self.start = [0, self.size - 1]
         self.finish = [self.size - 1, 0]
         self.route = self.astar(tuple(self.start), tuple(self.finish))
+        pygame.font.init()
+        self.myfont = pygame.font.SysFont('arial', 30 - self.size)
+        if self.visualise:
+            self.longestdist = self.longestroute()
         t2 = time.time()
-        print(t2-t1)
+        if LOG:
+            print(f'finished initializing in: {t2-t1}')
+        self.screen = pygame.display.set_mode(
+            (self.windowsize, self.windowsize))
+        prevfinish = None
+        prevstart = None
+        self.route = self.astar(tuple(self.start), tuple(self.finish))
+        self.draw()
+        pygame.display.update()
         while(True):
-            self.draw()
-            pygame.display.update()
-            pygame.time.delay(100)
-            self.route = self.astar(tuple(self.start), tuple(self.finish))
+            t1 = time.time()
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
                     if(event.key == pygame.K_q):
@@ -124,32 +138,66 @@ class Game():
                     x, y = event.pos
                     self.finish = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
                         y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
+                    if self.finish != prevfinish:
+                        prevfinish = self.finish
+                        self.route = self.astar(
+                            tuple(self.start), tuple(self.finish))
+                        self.draw()
+                        pygame.display.update()
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     x, y = event.pos
                     self.start = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
                         y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
+                    if self.start != prevstart:
+                        prevstart = self.start
+                        self.route = self.astar(
+                            tuple(self.start), tuple(self.finish))
+                        self.draw()
+                        pygame.display.update()
+            t2 = time.time()
+            if LOG:
+                try:
+                    pygame.display.set_caption(f'{1/(t2-t1)} FPS')
+                except ZeroDivisionError:
+                    pygame.display.set_caption(f'    FPS')
 
     def draw(self):
         self.screen.fill(self.backgroundcolor)
         for x in range(self.size):
             for y in range(self.size):
                 t = self.maze.gettile(x, y)
+                if self.visualise:
+                    dist = len(self.astar(tuple([x, y]), tuple(self.start)))
+                    if self.longestdist != None:
+                        r = 255 - dist/self.longestdist*255
+                    else:
+                        r = abs((255 - dist/(self.size*2*(2**(1/2)))*255)/2)
+                    try:
+                        pygame.draw.rect(self.screen, (r, r, r), [
+                            x*self.tilesize, y*self.tilesize, (x + 1)*self.tilesize, (y + 1)*self.tilesize])
+                    except ValueError:
+                        print(r, dist, self.longestdist)
+                    txt = str(dist - 1)
+                    textsurface = self.myfont.render(txt, False, (255, 0, 0))
+                    self.screen.blit(textsurface, [
+                                    (x+0.6)*self.tilesize, (y+0.6)*self.tilesize, (x+0.9)*self.tilesize, (y+0.9)*self.tilesize])
+                w = int(self.tilesize/5)
                 if t.top:
-                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.05, y*self.tilesize + self.tilesize*0.05], [
-                                     x*self.tilesize + self.tilesize*1.05, y*self.tilesize + self.tilesize*0.05], int(self.tilesize/5))
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize, y*self.tilesize], [
+                                     x*self.tilesize + self.tilesize, y*self.tilesize], w)
                 if t.bottom:
-                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.05, y*self.tilesize + self.tilesize*0.95], [
-                                     x*self.tilesize + self.tilesize*1.05, y*self.tilesize + self.tilesize*0.95], int(self.tilesize/5))
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize, y*self.tilesize + self.tilesize], [
+                                     x*self.tilesize + self.tilesize, y*self.tilesize + self.tilesize], w)
                 if t.left:
-                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*0.05], [
-                                     x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*1.05], int(self.tilesize/5))
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize, y*self.tilesize], [
+                                     x*self.tilesize, y*self.tilesize + self.tilesize], w)
                 if t.right:
-                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.95, y*self.tilesize + self.tilesize*0.05], [
-                                     x*self.tilesize + self.tilesize*0.95, y*self.tilesize + self.tilesize*1.05], int(self.tilesize/5))
-        pygame.draw.rect(self.screen, (120, 200, 100), [self.start[0]*self.tilesize+0.4*self.tilesize,
-                                                        self.start[1]*self.tilesize + 0.4*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
-        pygame.draw.rect(self.screen, (120, 0, 100), [self.finish[0]*self.tilesize+0.4*self.tilesize,
-                                                      self.finish[1]*self.tilesize + 0.4*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize, y*self.tilesize], [
+                                     x*self.tilesize + self.tilesize, y*self.tilesize + self.tilesize], w)
+        pygame.draw.rect(self.screen, (120, 200, 100), [self.start[0]*self.tilesize+0.3*self.tilesize,
+                                                        self.start[1]*self.tilesize + 0.3*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
+        pygame.draw.rect(self.screen, (120, 0, 100), [self.finish[0]*self.tilesize+0.3*self.tilesize,
+                                                      self.finish[1]*self.tilesize + 0.3*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
         for i in range(1, len(self.route)):
             x1, y1 = self.route[i-1]
             x2, y2 = self.route[i]
@@ -157,9 +205,29 @@ class Game():
             pygame.draw.line(self.screen, (120*percent, 200*(1-percent), 100), (x1*self.tilesize + self.tilesize/2, y1*self.tilesize + self.tilesize/2),
                              (x2*self.tilesize + self.tilesize/2, y2*self.tilesize + self.tilesize/2), int(self.tilesize/10))
 
-    def check(self):
-        if not self.complete:
-            self.thread.join()
+    def longestroute(self):
+        if self.size > 12:
+            return None
+        print('use accurate alogithm for better vizualization? (time expensive!!!) (0/1)')
+        if int(input()) != 1:
+            return None
+        else:
+            tt = time.time()
+            m = 0
+            t1 = None
+            t2 = None
+            a = self.alltiles()
+            for i in range(0, len(a)):
+                for j in range(i, len(a)):
+                    d = len(self.astar(tuple(a[i]), tuple(a[j])))
+                    if d > m:
+                        m = d
+                        t1 = a[i]
+                        t2 = a[j]
+            if LOG:
+                print(
+                    f'the longest route length is {m} between {t1} and {t2}. calculated in {time.time() - tt}')
+            return m
 
     @lru_cache(typed=True)
     def neighbors(self, node: tuple) -> list:
@@ -228,6 +296,8 @@ class Game():
     def possiblesteps(self, coords: tuple) -> list:
         x, y = coords
         neighbors = [[x+1, y], [x-1, y], [x, y+1], [x, y-1]]
+        if x > 0 and x < self.size-1 and y > 0 and y < self.size-1:
+            return neighbors
         for k, neib in enumerate(neighbors):
             if neib not in self.alltiles():
                 neighbors.pop(k)
@@ -256,16 +326,41 @@ class Game():
                      random.randrange(0, self.size, 1)]
         route = []
         route.append(start)
+        attempts = 0
+        maxattempts = 100*(self.size**2)
+        maxroute = (2*self.size)**2
+        prev = None
         while(not allvisited()):
             current = random.choice(self.possiblesteps(tuple(route[-1])))
             if current in route:
+                attempts += 1
                 route.clear()
                 route.append(start)
+            elif attempts > maxattempts or len(route) > maxroute:
+                if LOG:
+                    print("generation failure. new attempt.")
+                route.clear()
+                start = [random.randrange(
+                    0, self.size, 1), random.randrange(0, self.size, 1)]
+                while(start == finish):
+                    start = [random.randrange(0, self.size, 1),
+                             random.randrange(0, self.size, 1)]
+                route.append(start)
+                attempts = 0
+                self.maze.reset()
+                visited.clear()
+                visited.append(finish)
+                prev = 0
             else:
                 route.append(current)
                 if current in visited:
                     makeroute(route)
-                    print(f'{int(100*len(visited)/len(alltiles))}%')
+                    percent = int(100*len(visited)/len(alltiles))
+                    percent = round(percent/10)*10
+                    if percent != prev:
+                        prev = percent
+                        if LOG:
+                            print(f"{percent}%")
                     for i in route:
                         visited.append(i)
                     visited.pop()
@@ -276,8 +371,10 @@ class Game():
                         break
                     route.clear()
                     route.append(start)
-        self.complete = True
+        if LOG:            
+            print(f'{attempts} attempts of {maxattempts} max attemps')
 
 
 if __name__ == '__main__':
+    print("type in size of maze:")
     Game(int(input()))
