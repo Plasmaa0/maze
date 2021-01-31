@@ -1,9 +1,10 @@
 import pygame
 from pygame import time
 from pygame.draw import line
-import threading
 import random
 import queue
+import time
+from functools import lru_cache
 
 
 class Tile():
@@ -83,9 +84,9 @@ class Game():
     Main game class
     '''
 
-    def __init__(self, size: int, doanimate: bool) -> None:
+    def __init__(self, size: int) -> None:
+        t1 = time.time()
         self.complete = False
-        self.doanimate = doanimate
         self.fps = 24
         self.size = size
         self.clock = pygame.time.Clock()
@@ -94,45 +95,77 @@ class Game():
         self.wallcolor = [114, 155, 121]
         self.tilesize = int(self.windowsize/self.size)
         self.maze = Tilemap(self.size)
-        while True:
-            self.thread = threading.Thread(None, self.createmaze())
-            self.thread.start()
-            time.delay(1000)
-            if self.complete:
-                break
-        # self.createmaze()
-        self.thread.join()
+        # while True:
+        #     self.thread = threading.Thread(None, self.createmaze())
+        #     self.thread.start()
+        #     time.delay(1000)
+        #     if self.complete:
+        #         break
+
+        self.createmaze()
+        # self.thread.join()
         self.screen = pygame.display.set_mode(
             (self.windowsize, self.windowsize))
-        start = [0, self.size - 1]
-        finish = [self.size - 1, 0]
-        self.route = self.astar(start, finish)
+        self.start = [0, self.size - 1]
+        self.finish = [self.size - 1, 0]
+        self.route = self.astar(tuple(self.start), tuple(self.finish))
+        t2 = time.time()
+        print(t2-t1)
         while(True):
             self.draw()
             pygame.display.update()
             pygame.time.delay(100)
-            self.route = self.astar(start, finish)
+            self.route = self.astar(tuple(self.start), tuple(self.finish))
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
                     if(event.key == pygame.K_q):
                         exit(0)
                 if event.type == pygame.MOUSEMOTION:
                     x, y = event.pos
-                    finish = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
+                    self.finish = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
                         y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     x, y = event.pos
-                    start = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
+                    self.start = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
                         y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
+
+    def draw(self):
+        self.screen.fill(self.backgroundcolor)
+        for x in range(self.size):
+            for y in range(self.size):
+                t = self.maze.gettile(x, y)
+                if t.top:
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.05, y*self.tilesize + self.tilesize*0.05], [
+                                     x*self.tilesize + self.tilesize*1.05, y*self.tilesize + self.tilesize*0.05], int(self.tilesize/5))
+                if t.bottom:
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.05, y*self.tilesize + self.tilesize*0.95], [
+                                     x*self.tilesize + self.tilesize*1.05, y*self.tilesize + self.tilesize*0.95], int(self.tilesize/5))
+                if t.left:
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*0.05], [
+                                     x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*1.05], int(self.tilesize/5))
+                if t.right:
+                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.95, y*self.tilesize + self.tilesize*0.05], [
+                                     x*self.tilesize + self.tilesize*0.95, y*self.tilesize + self.tilesize*1.05], int(self.tilesize/5))
+        pygame.draw.rect(self.screen, (120, 200, 100), [self.start[0]*self.tilesize+0.4*self.tilesize,
+                                                        self.start[1]*self.tilesize + 0.4*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
+        pygame.draw.rect(self.screen, (120, 0, 100), [self.finish[0]*self.tilesize+0.4*self.tilesize,
+                                                      self.finish[1]*self.tilesize + 0.4*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
+        for i in range(1, len(self.route)):
+            x1, y1 = self.route[i-1]
+            x2, y2 = self.route[i]
+            percent = 1 - i/len(self.route)
+            pygame.draw.line(self.screen, (120*percent, 200*(1-percent), 100), (x1*self.tilesize + self.tilesize/2, y1*self.tilesize + self.tilesize/2),
+                             (x2*self.tilesize + self.tilesize/2, y2*self.tilesize + self.tilesize/2), int(self.tilesize/10))
 
     def check(self):
         if not self.complete:
             self.thread.join()
 
-    def neighbors(self, node: list) -> list:
+    @lru_cache(typed=True)
+    def neighbors(self, node: tuple) -> list:
         neighborlist = []
         x1, y1 = node
-        possible = self.possiblesteps(node)
+        possible = self.possiblesteps(tuple(node))
         for neighbor in possible:
             x2, y2 = neighbor
             if x1 == x2 and y2 > y1:
@@ -149,13 +182,15 @@ class Game():
                     neighborlist.append(neighbor)
         return neighborlist
 
-    def astar(self, start: list, finish: list) -> list:
-        def heuristic(a: list, b: list) -> int:
+    @lru_cache(typed=True)
+    def astar(self, start: tuple, finish: tuple) -> list:
+        @lru_cache(typed=True)
+        def heuristic(a: tuple, b: tuple) -> int:
             x1, y1 = a
             x2, y2 = b
             return abs(x1 - x2) + abs(y1 - y2)
 
-        def readroute(camefrom: dict, start: list, finish: list) -> list:
+        def readroute(camefrom: dict, finish: list) -> list:
             route = [finish]
             current = camefrom[tuple(finish)]
             while current != 0:
@@ -173,37 +208,14 @@ class Game():
             current = current[1]
             if current == finish:
                 break
-            for next1 in self.neighbors(current):
+            for next1 in self.neighbors(tuple(current)):
                 newcost = costsofar[tuple(current)]
                 if tuple(next1) not in costsofar or newcost < costsofar[tuple(next1)]:
                     costsofar[tuple(next1)] = newcost
-                    priority = newcost + heuristic(finish, next1)
+                    priority = newcost + heuristic(tuple(finish), tuple(next1))
                     frontier.put((priority, next1))
                     camefrom[tuple(next1)] = current
-        return readroute(camefrom, start, finish)
-
-    def draw(self):
-        self.screen.fill(self.backgroundcolor)
-        for x in range(self.size):
-            for y in range(self.size):
-                t = self.maze.gettile(x, y)
-                if t.top:
-                    pygame.draw.line(self.screen, self.wallcolor, [
-                                     x*self.tilesize + self.tilesize*0.05, y*self.tilesize + self.tilesize*0.05], [x*self.tilesize + self.tilesize*1.05, y*self.tilesize + self.tilesize*0.05], int(self.tilesize/5))
-                if t.bottom:
-                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.05, y*self.tilesize + self.tilesize*0.95], [
-                                     x*self.tilesize + self.tilesize*1.05, y*self.tilesize + self.tilesize*0.95], int(self.tilesize/5))
-                if t.left:
-                    pygame.draw.line(self.screen, self.wallcolor, [
-                                     x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*0.05], [x*self.tilesize + self.tilesize*0.1, y*self.tilesize + self.tilesize*1.05], int(self.tilesize/5))
-                if t.right:
-                    pygame.draw.line(self.screen, self.wallcolor, [x*self.tilesize + self.tilesize*0.95, y*self.tilesize + self.tilesize*0.05], [
-                                     x*self.tilesize + self.tilesize*0.95, y*self.tilesize + self.tilesize*1.05], int(self.tilesize/5))
-        for i in range(1, len(self.route)):
-            x1, y1 = self.route[i-1]
-            x2, y2 = self.route[i]
-            pygame.draw.line(self.screen, (120, 200, 100), (x1*self.tilesize + self.tilesize/2, y1*self.tilesize + self.tilesize/2),
-                             (x2*self.tilesize + self.tilesize/2, y2*self.tilesize + self.tilesize/2), int(self.tilesize/10))
+        return readroute(camefrom, finish)
 
     def alltiles(self):
         alltiles = []
@@ -212,9 +224,9 @@ class Game():
                 alltiles.append([x, y])
         return alltiles
 
-    def possiblesteps(self, coords: list) -> list:
+    @lru_cache(typed=True)
+    def possiblesteps(self, coords: tuple) -> list:
         x, y = coords
-        # print(coords)
         neighbors = [[x+1, y], [x-1, y], [x, y+1], [x, y-1]]
         for k, neib in enumerate(neighbors):
             if neib not in self.alltiles():
@@ -245,7 +257,7 @@ class Game():
         route = []
         route.append(start)
         while(not allvisited()):
-            current = random.choice(self.possiblesteps(route[-1]))
+            current = random.choice(self.possiblesteps(tuple(route[-1])))
             if current in route:
                 route.clear()
                 route.append(start)
@@ -268,4 +280,4 @@ class Game():
 
 
 if __name__ == '__main__':
-    Game(int(input()), True)
+    Game(int(input()))
