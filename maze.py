@@ -1,15 +1,12 @@
 import pygame
-from pygame import time
-from pygame.draw import line
 import random
 import queue
 import time
 from functools import lru_cache
-import threading
 import queue
 
 
-LOG = True
+LOG = False
 
 
 class Tile():
@@ -102,9 +99,7 @@ class Game():
         else:
             self.visualise = False
         t1 = time.time()
-        self.fps = 24
         self.size = size
-        self.clock = pygame.time.Clock()
         self.backgroundcolor = [46, 44, 47]
         self.windowsize = 800
         self.wallcolor = [114, 155, 121]
@@ -126,8 +121,9 @@ class Game():
         prevfinish = None
         prevstart = None
         self.route = self.astar(tuple(self.start), tuple(self.finish))
-        self.draw()
+        self.draw(self.visualise)
         pygame.display.update()
+        print("Opening the window. Press Q to exit.")
         while(True):
             t1 = time.time()
             for event in pygame.event.get():
@@ -142,7 +138,10 @@ class Game():
                         prevfinish = self.finish
                         self.route = self.astar(
                             tuple(self.start), tuple(self.finish))
-                        self.draw()
+                        self.draw(False if self.size > 10 else True)
+                        if not LOG:
+                            pygame.display.set_caption(
+                                f'distance: {len(self.astar(tuple(self.start), tuple(self.finish))) - 1}')
                         pygame.display.update()
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     x, y = event.pos
@@ -152,21 +151,21 @@ class Game():
                         prevstart = self.start
                         self.route = self.astar(
                             tuple(self.start), tuple(self.finish))
-                        self.draw()
+                        self.draw(True)
                         pygame.display.update()
             t2 = time.time()
             if LOG:
                 try:
-                    pygame.display.set_caption(f'{1/(t2-t1)} FPS')
+                    pygame.display.set_caption(f'{round(1/(t2-t1))} FPS')
                 except ZeroDivisionError:
-                    pygame.display.set_caption(f'    FPS')
+                    pass
 
-    def draw(self):
+    def draw(self, visualisecells: bool):
         self.screen.fill(self.backgroundcolor)
         for x in range(self.size):
             for y in range(self.size):
                 t = self.maze.gettile(x, y)
-                if self.visualise:
+                if self.visualise and visualisecells:
                     dist = len(self.astar(tuple([x, y]), tuple(self.start)))
                     if self.longestdist != None:
                         r = 255 - dist/self.longestdist*255
@@ -330,6 +329,8 @@ class Game():
         maxattempts = 100*(self.size**2)
         maxroute = (2*self.size)**2
         prev = None
+        if not LOG:
+            prev = -1
         while(not allvisited()):
             current = random.choice(self.possiblesteps(tuple(route[-1])))
             if current in route:
@@ -350,17 +351,17 @@ class Game():
                 self.maze.reset()
                 visited.clear()
                 visited.append(finish)
-                prev = 0
+                if LOG:
+                    prev = 0
             else:
                 route.append(current)
                 if current in visited:
                     makeroute(route)
                     percent = int(100*len(visited)/len(alltiles))
                     percent = round(percent/10)*10
-                    if percent != prev:
+                    if (percent != prev and LOG) or (percent > prev):
                         prev = percent
-                        if LOG:
-                            print(f"{percent}%")
+                        print(f"{percent}%")
                     for i in route:
                         visited.append(i)
                     visited.pop()
@@ -371,10 +372,12 @@ class Game():
                         break
                     route.clear()
                     route.append(start)
-        if LOG:            
+        if LOG:
             print(f'{attempts} attempts of {maxattempts} max attemps')
 
 
 if __name__ == '__main__':
+    print("Log? (1/0)")
+    LOG = int(input()) == 1
     print("type in size of maze:")
     Game(int(input()))
