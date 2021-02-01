@@ -92,7 +92,12 @@ class Game():
     '''
 
     def __init__(self, size: int) -> None:
-        if size < 15:
+        print('Play or watch (1/2)?')
+        self.a_star = True
+        if int(input()) == 1:
+            self.playerposition = [0, size - 1]
+            self.a_star = False
+        if size < 15 and self.a_star:
             print(
                 "do you want to visualize distance from start to different maze nodes?(0/1) (time expensive)")
             self.visualise = int(input()) == 1
@@ -108,7 +113,10 @@ class Game():
         self.createmaze()
         self.start = [0, self.size - 1]
         self.finish = [self.size - 1, 0]
-        self.route = self.astar(tuple(self.start), tuple(self.finish))
+        if self.a_star:
+            self.route = self.astar(tuple(self.start), tuple(self.finish))
+        else:
+            self.route = []
         pygame.font.init()
         self.myfont = pygame.font.SysFont('arial', 30 - self.size)
         if self.visualise:
@@ -118,47 +126,85 @@ class Game():
             print(f'finished initializing in: {t2-t1}')
         self.screen = pygame.display.set_mode(
             (self.windowsize, self.windowsize))
-        prevfinish = None
-        prevstart = None
-        self.route = self.astar(tuple(self.start), tuple(self.finish))
+        self.prevfinish = None
+        self.prevstart = None
+        if self.a_star:
+            self.route = self.astar(tuple(self.start), tuple(self.finish))
         self.draw(self.visualise)
         pygame.display.update()
         print("Opening the window. Press Q to exit.")
         while(True):
-            t1 = time.time()
-            for event in pygame.event.get():
-                if event.type == pygame.KEYDOWN:
-                    if(event.key == pygame.K_q):
-                        exit(0)
-                if event.type == pygame.MOUSEMOTION:
-                    x, y = event.pos
-                    self.finish = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
-                        y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
-                    if self.finish != prevfinish:
-                        prevfinish = self.finish
-                        self.route = self.astar(
-                            tuple(self.start), tuple(self.finish))
-                        self.draw(False if self.size > 10 else True)
-                        if not LOG:
-                            pygame.display.set_caption(
-                                f'distance: {len(self.astar(tuple(self.start), tuple(self.finish))) - 1}')
-                        pygame.display.update()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    x, y = event.pos
-                    self.start = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
-                        y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
-                    if self.start != prevstart:
-                        prevstart = self.start
-                        self.route = self.astar(
-                            tuple(self.start), tuple(self.finish))
-                        self.draw(True)
-                        pygame.display.update()
-            t2 = time.time()
-            if LOG:
-                try:
-                    pygame.display.set_caption(f'{round(1/(t2-t1))} FPS')
-                except ZeroDivisionError:
-                    pass
+            self.update()
+
+    def update(self):
+        t1 = time.time()
+        if not self.a_star:
+            if self.playerposition == self.finish:
+                self.playerposition = self.start
+                self.restart()
+
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                new = []
+                if(event.key == pygame.K_q):
+                    pygame.quit()
+                    exit(0)
+                elif(event.key == pygame.K_r):
+                    self.restart()
+                elif(event.key == pygame.K_w and self.canstep('UP') and not self.a_star):
+                    new = [self.playerposition[0], self.playerposition[1] - 1]
+                elif(event.key == pygame.K_a and self.canstep('LEFT') and not self.a_star):
+                    new = [self.playerposition[0] - 1, self.playerposition[1]]
+                elif(event.key == pygame.K_s and self.canstep('DOWN') and not self.a_star):
+                    new = [self.playerposition[0], self.playerposition[1] + 1]
+                elif(event.key == pygame.K_d and self.canstep('RIGHT') and not self.a_star):
+                    new = [self.playerposition[0] + 1, self.playerposition[1]]
+                if new in self.alltiles() and not self.a_star:
+                    self.playerposition = new
+                self.draw(False)
+                pygame.display.update()
+            if event.type == pygame.MOUSEMOTION and self.a_star:
+                x, y = event.pos
+                self.finish = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
+                    y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
+                if self.finish != self.prevfinish:
+                    self.prevfinish = self.finish
+                    self.route = self.astar(
+                        tuple(self.start), tuple(self.finish))
+                    self.draw(False if self.size > 10 else True)
+                    if not LOG:
+                        pygame.display.set_caption(
+                            f'distance: {len(self.astar(tuple(self.start), tuple(self.finish))) - 1}')
+                    pygame.display.update()
+            if event.type == pygame.MOUSEBUTTONDOWN and self.a_star:
+                x, y = event.pos
+                self.start = [int(x/self.tilesize) if int(x/self.tilesize) < self.size else self.size - 1, int(
+                    y/self.tilesize) if int(y/self.tilesize) < self.size else self.size - 1]
+                if self.start != self.prevstart:
+                    self.prevstart = self.start
+                    self.route = self.astar(
+                        tuple(self.start), tuple(self.finish))
+                    self.draw(True)
+                    pygame.display.update()
+        t2 = time.time()
+        if LOG:
+            try:
+                pygame.display.set_caption(f'{round(1/(t2-t1))} FPS')
+            except ZeroDivisionError:
+                pass
+
+    def restart(self):
+        self.maze = Tilemap(self.size)
+        self.createmaze()
+        self.prevfinish = None
+        self.prevstart = None
+        self.start = [0, self.size - 1]
+        self.finish = [self.size - 1, 0]
+        if self.a_star:
+            self.route = self.astar(tuple(self.start), tuple(self.finish))
+        self.playerposition = self.start
+        self.draw(self.visualise)
+        pygame.display.update()
 
     def draw(self, visualisecells: bool):
         self.screen.fill(self.backgroundcolor)
@@ -197,6 +243,9 @@ class Game():
                                                         self.start[1]*self.tilesize + 0.3*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
         pygame.draw.rect(self.screen, (120, 0, 100), [self.finish[0]*self.tilesize+0.3*self.tilesize,
                                                       self.finish[1]*self.tilesize + 0.3*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
+        if not self.a_star:
+            pygame.draw.rect(self.screen, (0, 100, 250), [self.playerposition[0]*self.tilesize+0.3*self.tilesize,
+                                                          self.playerposition[1]*self.tilesize + 0.3*self.tilesize, 0.3*self.tilesize, 0.3*self.tilesize])
         for i in range(1, len(self.route)):
             x1, y1 = self.route[i-1]
             x2, y2 = self.route[i]
@@ -228,7 +277,17 @@ class Game():
                     f'the longest route length is {m} between {t1} and {t2}. calculated in {time.time() - tt}')
             return m
 
-    @lru_cache(typed=True)
+    def canstep(self, direction: str):
+        if direction == 'UP':
+            return not self.maze.tiles[self.playerposition[0]][self.playerposition[1]].top
+        if direction == 'DOWN':
+            return not self.maze.tiles[self.playerposition[0]][self.playerposition[1]].bottom
+        if direction == 'LEFT':
+            return not self.maze.tiles[self.playerposition[0]][self.playerposition[1]].left
+        if direction == 'RIGHT':
+            return not self.maze.tiles[self.playerposition[0]][self.playerposition[1]].right
+
+    # @lru_cache(typed=True)
     def neighbors(self, node: tuple) -> list:
         neighborlist = []
         x1, y1 = node
@@ -249,7 +308,7 @@ class Game():
                     neighborlist.append(neighbor)
         return neighborlist
 
-    @lru_cache(typed=True)
+    # @lru_cache(typed=True)
     def astar(self, start: tuple, finish: tuple) -> list:
         @lru_cache(typed=True)
         def heuristic(a: tuple, b: tuple) -> int:
@@ -377,7 +436,11 @@ class Game():
 
 
 if __name__ == '__main__':
-    print("Log? (1/0)")
-    LOG = int(input()) == 1
-    print("type in size of maze:")
-    Game(int(input()))
+    try:
+        print("Log? (1/0)")
+        LOG = int(input()) == 1
+        print("type in size of maze:")
+        Game(int(input()))
+    except KeyboardInterrupt:
+        print("keyboard interrupt. exiting.")
+        pass
